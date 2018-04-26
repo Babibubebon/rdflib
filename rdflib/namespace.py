@@ -5,6 +5,7 @@ from __future__ import print_function
 import logging
 
 import os
+import re
 from unicodedata import category
 
 from six import string_types
@@ -458,34 +459,20 @@ class NamespaceManager(object):
 # * Characters '-' and '.' are allowed as name characters.
 
 
-NAME_START_CATEGORIES = ["Ll", "Lu", "Lo", "Lt", "Nl"]
-NAME_CATEGORIES = NAME_START_CATEGORIES + ["Mc", "Me", "Mn", "Lm", "Nd"]
-ALLOWED_NAME_CHARS = [u"\u00B7", u"\u0387", u"-", u".", u"_"]
+NAME_START_CHAR = "[A-Z_a-z\u00C0-\u00D6\u00D8-\u00F6 \u00F8-\u02FF\u0370-\u037D\u037F-\u1FFF\u200C-\u200D\u2070-\u218F\u2C00-\u2FEF\u3001-\uD7FF\uF900-\uFDCF\uFDF0-\uFFFD\U00010000-\U000EFFFF]"
+NAME_CHAR = "[" + NAME_START_CHAR[1:-1] + "\-\.0-9\u00B7\u0300-\u036F\u203F-\u2040]"
+NCNAME = NAME_START_CHAR + NAME_CHAR + "*"
 
-
-# http://www.w3.org/TR/REC-xml-names/#NT-NCName
-#  [4] NCName ::= (Letter | '_') (NCNameChar)* /* An XML Name, minus
-#      the ":" */
-#  [5] NCNameChar ::= Letter | Digit | '.' | '-' | '_' | CombiningChar
-#      | Extender
+# https://www.w3.org/TR/2009/REC-xml-names-20091208/#NT-NCName
+#  [4]  NCName     ::= Name - (Char* ':' Char*) /* An XML Name, minus the ":" */
+# http://www.w3.org/TR/2008/REC-xml-20081126/#NT-Name
+#  [4]  NameStartChar ::= ":" | [A-Z] | "_" | [a-z] | [#xC0-#xD6] | [#xD8-#xF6] | [#xF8-#x2FF] | [#x370-#x37D] | [#x37F-#x1FFF] | [#x200C-#x200D] | [#x2070-#x218F] | [#x2C00-#x2FEF] | [#x3001-#xD7FF] | [#xF900-#xFDCF] | [#xFDF0-#xFFFD] | [#x10000-#xEFFFF]
+#  [4a]	NameChar ::= NameStartChar | "-" | "." | [0-9] | #xB7 | [#x0300-#x036F] | [#x203F-#x2040]
+#  [5]  Name     ::= NameStartChar (NameChar)*
 
 
 def is_ncname(name):
-    first = name[0]
-    if first == "_" or category(first) in NAME_START_CATEGORIES:
-        for i in range(1, len(name)):
-            c = name[i]
-            if not category(c) in NAME_CATEGORIES:
-                if c in ALLOWED_NAME_CHARS:
-                    continue
-                return 0
-            # if in compatibility area
-            # if decomposition(c)!='':
-            #    return 0
-
-        return 1
-    else:
-        return 0
+    return 1 if re.match(NCNAME + "$", name) else 0
 
 
 XMLNS = "http://www.w3.org/XML/1998/namespace"
@@ -497,11 +484,9 @@ def split_uri(uri):
     length = len(uri)
     for i in range(0, length):
         c = uri[-i - 1]
-        if not category(c) in NAME_CATEGORIES:
-            if c in ALLOWED_NAME_CHARS:
-                continue
+        if not re.match(NAME_CHAR, c):
             for j in range(-1 - i, length):
-                if category(uri[j]) in NAME_START_CATEGORIES or uri[j] == "_":
+                if re.match(NAME_START_CHAR, uri[j]):
                     ns = uri[:j]
                     if not ns:
                         break
